@@ -3,10 +3,10 @@
 generate_categoryBandC_UCSC_from_inputnoise_summary.py
 
 Reads:
-    UCSC/HX/inputnoise_error_summary_ucsc.txt
+    UCSC/HX2/inputnoise_error_summary_ucsc.txt
 
 Writes:
-    UCSC/HX/inputnoise_category_summary_ucsc.txt
+    UCSC/HX2/inputnoise_category_summary_ucsc.txt
 
 This generator parses the per-stream input-noise error-summary format.
 
@@ -37,8 +37,8 @@ Run:
 
 Optional:
     python generate_categoryBandC_UCSC_from_inputnoise_summary.py \
-        --input_file UCSC/HX/inputnoise_error_summary_ucsc.txt \
-        --output_file UCSC/HX/inputnoise_category_summary_ucsc.txt
+        --input_file UCSC/HX2/inputnoise_error_summary_ucsc.txt \
+        --output_file UCSC/HX2/inputnoise_category_summary_ucsc.txt
 """
 
 import re
@@ -760,13 +760,13 @@ def main():
 
     parser.add_argument(
         "--input_file",
-        default="UCSC/HX/inputnoise_error_summary_ucsc.txt",
+        default="UCSC/HX2/inputnoise_error_summary_ucsc.txt",
         help="Input UCSC input-noise error-summary file",
     )
 
     parser.add_argument(
         "--output_file",
-        default="UCSC/HX/inputnoise_category_summary_ucsc.txt",
+        default="UCSC/HX2/inputnoise_category_summary_ucsc.txt",
         help="Output UCSC input-noise category-summary file",
     )
 

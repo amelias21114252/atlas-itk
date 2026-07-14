@@ -3,10 +3,10 @@
 pythongenerate_categoryBandC_LBNL_from_inputnoise_summary.py
 
 Reads:
-    LBNL/HX/inputnoise_error_summary_lbnl.txt
+    LBNL/HX2/inputnoise_error_summary_lbnl.txt
 
 Writes:
-    LBNL/HX/inputnoise_category_summary_lbnl.txt
+    LBNL/HX2/inputnoise_category_summary_lbnl.txt
 
 This generator parses the per-stream input-noise error-summary format.
 
@@ -37,8 +37,8 @@ Run:
 
 Optional:
     python generate_categoryBandC_LBNL_from_inputnoise_summary.py \
-        --input_file LBNL/HX/inputnoise_error_summary_lbnl.txt \
-        --output_file LBNL/HX/inputnoise_category_summary_lbnl.txt
+        --input_file LBNL/HX2/inputnoise_error_summary_lbnl.txt \
+        --output_file LBNL/HX2/inputnoise_category_summary_lbnl.txt
 """
 
 import re
@@ -760,13 +760,13 @@ def main():
 
     parser.add_argument(
         "--input_file",
-        default="LBNL/HX/inputnoise_error_summary_lbnl.txt",
+        default="LBNL/HX2/inputnoise_error_summary_lbnl.txt",
         help="Input LBNL input-noise error-summary file",
     )
 
     parser.add_argument(
         "--output_file",
-        default="LBNL/HX/inputnoise_category_summary_lbnl.txt",
+        default="LBNL/HX2/inputnoise_category_summary_lbnl.txt",
         help="Output LBNL input-noise category-summary file",
     )
 

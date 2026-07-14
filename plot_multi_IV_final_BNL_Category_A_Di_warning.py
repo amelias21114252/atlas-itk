@@ -15,7 +15,7 @@
 # Category D(i), or a yellow warning.
 #
 # Run:
-#   python plot_multi_IV_final_BNL_Category_A_Di_warning.py -i "BNL/ML/*/*.json" -o "BNL/ML" --workers 6
+#   python plot_multi_IV_final_BNL_Category_A_Di_warning.py -i "BNL/ML/*/*.json" -o "BNL/ML2" --workers 6
 #
 # Optional faster test without PNG:
 #   python plot_multi_IV_final_BNL_Category_A_Di_warning.py \
@@ -72,7 +72,7 @@ mplt.rc(
 # ============================================================
 
 SITE = "BNL"
-DEFAULT_OUTPUT_DIR = "BNL/ML"
+DEFAULT_OUTPUT_DIR = "BNL/ML2"
 
 WARNING_CURRENT_THRESHOLD_NA = 300.0
 CATEGORY_A_CURRENT_THRESHOLD_NA = 600.0

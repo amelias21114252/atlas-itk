@@ -223,45 +223,60 @@ def dynamic_normalize_serial(module):
 SITE_DYNAMIC_FILES = {
     "BNL": {
         "ml_summary": [
+            "BNL/ML2/summary_page_bnl_ml.txt",
             "BNL/ML/summary_page_bnl_ml.txt",
         ],
         "iv_categories": [
+            "BNL/ML2/iv_category_summary_bnl.txt",
             "BNL/ML/iv_category_summary_bnl.txt",
         ],
         "inputnoise_categories": [
-            "BNL/HX/inputnoise_category_summary_bnl.txt",
+            "BNL/HX2/inputnoise_category_summary_bnl.txt",
+            "BNL/HX2/inputnoise_category_summary_bnl.txt",
         ],
         "hx_summary": [
+            "BNL/HX2/summary_page_bnl_HX.txt",
+            "BNL/HX2/summary_page_bnl_hx.txt",
             "BNL/HX/summary_page_bnl_HX.txt",
             "BNL/HX/summary_page_bnl_hx.txt",
         ],
     },
     "LBNL": {
         "ml_summary": [
+            "LBNL/ML2/summary_page_lbnl_ml.txt",
             "LBNL/ML/summary_page_lbnl_ml.txt",
         ],
         "iv_categories": [
+            "LBNL/ML2/iv_category_summary_lbnl.txt",
             "LBNL/ML/iv_category_summary_lbnl.txt",
         ],
         "inputnoise_categories": [
-            "LBNL/HX/inputnoise_category_summary_lbnl.txt",
+            "LBNL/HX2/inputnoise_category_summary_lbnl.txt",
+            "LBNL/HX2/inputnoise_category_summary_lbnl.txt",
         ],
         "hx_summary": [
+            "LBNL/HX2/summary_page_lbnl_HX.txt",
+            "LBNL/HX2/summary_page_lbnl_hx.txt",
             "LBNL/HX/summary_page_lbnl_HX.txt",
             "LBNL/HX/summary_page_lbnl_hx.txt",
         ],
     },
     "UCSC": {
         "ml_summary": [
+            "UCSC/ML2/summary_page_ucsc_ml.txt",
             "UCSC/ML/summary_page_ucsc_ml.txt",
         ],
         "iv_categories": [
+            "UCSC/ML2/iv_category_summary_ucsc.txt",
             "UCSC/ML/iv_category_summary_ucsc.txt",
         ],
         "inputnoise_categories": [
-            "UCSC/HX/inputnoise_category_summary_ucsc.txt",
+            "UCSC/HX2/inputnoise_category_summary_ucsc.txt",
+            "UCSC/HX2/inputnoise_category_summary_ucsc.txt",
         ],
         "hx_summary": [
+            "UCSC/HX2/summary_page_ucsc_HX.txt",
+            "UCSC/HX2/summary_page_ucsc_hx.txt",
             "UCSC/HX/summary_page_ucsc_HX.txt",
             "UCSC/HX/summary_page_ucsc_hx.txt",
         ],
@@ -657,6 +672,12 @@ def ml_url(site, ml):
     return f"{BASE_URL}/{site}/ML/{ml}" if ml else ""
 
 
+def ml2_url(site, ml):
+    """ML2 URL used for Category A/D(i)/yellow-warning problem plots."""
+    ml = normalize_serial(ml) if ml else ""
+    return f"{BASE_URL}/{site}/ML2/{ml}" if ml else ""
+
+
 # ============================================================
 # Status helpers
 # ============================================================
@@ -846,7 +867,7 @@ def category_summary():
 <h2>Category Summary</h2>
 
 <ul>
-  <li><strong>Category A:</strong> IV current above threshold.</li>
+  <li><strong>Category A:</strong> IV current above 600 nA.</li>
   <li><strong>Category B(i):</strong> Away-stream input noise greater than 1100 ENC for 10 or more channels.</li>
   <li><strong>Category B(ii):</strong> Under-stream input noise greater than 1100 ENC for 10 or more channels.</li>
   <li><strong>Category C(i):</strong> Away-stream input noise less than 600 ENC for 10 or more channels.</li>
@@ -1465,7 +1486,7 @@ def problem_module_row(i, site, hx, ml, timestamp):
       no-skip plots -> {site}/HX/{hx}/histograms_combined_noskip/
 
     IV:
-      normal ML path -> {site}/ML/{ml}/IV/
+      selected problem plot path -> {site}/ML2/{ml}/IV/
 
     Displays PNG images directly.
     """
@@ -1475,7 +1496,7 @@ def problem_module_row(i, site, hx, ml, timestamp):
     hx_base = hx_url(site, hx)
     hx2_base = hx2_url(site, hx)
     hx3_base = hx3_url(site, hx)
-    ml_base = ml_url(site, ml)
+    ml_base = ml2_url(site, ml)
 
     timestamp = timestamp or "—"
 
@@ -1733,8 +1754,6 @@ def copy_logo_files(out_dir):
 # ============================================================
 
 def main():
-    load_external_timestamp_lists()
-
     out_dir = Path("categories_website")
     out_dir.mkdir(exist_ok=True)
 
@@ -1801,7 +1820,7 @@ def main():
                 "combined_noskip_away_png": f"{hx_url(site, hx)}/histograms_combined_noskip/{hx}_combined-away.png" if hx else "",
                 "combined_noskip_under_png": f"{hx_url(site, hx)}/histograms_combined_noskip/{hx}_combined-under.png" if hx else "",
 
-                "iv_png": f"{ml_url(site, ml)}/IV/{ml}.png" if ml else "",
+                "iv_png": f"{ml2_url(site, ml)}/IV/{ml}.png" if ml else "",
 
                 "json_away_skipped": f"{hx_url(site, hx)}/histograms_combined_noskip/{hx}_away_low_high_values.json" if hx else "",
                 "json_under_skipped": f"{hx_url(site, hx)}/histograms_combined_noskip/{hx}_under_low_high_values.json" if hx else "",
@@ -1934,6 +1953,11 @@ def main():
     print("   LBNL/HX/SN.../histograms_combined_noskip/*.png")
     print("   UCSC/HX/SN.../histograms_combined/*.png")
     print("   UCSC/HX/SN.../histograms_combined_noskip/*.png")
+    print("")
+    print("✅ Problem page IV PNG paths:")
+    print("   BNL/ML2/SN.../IV/*.png")
+    print("   LBNL/ML2/SN.../IV/*.png")
+    print("   UCSC/ML2/SN.../IV/*.png")
     print("")
     print("✅ Problem pages do not include Detailed Histograms column.")
     print("")

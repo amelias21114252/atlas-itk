@@ -3,10 +3,11 @@
 python generate_categoryBandC_BNL_from_inputnoise_summary.py
 
 Reads:
-    BNL/HX/inputnoise_error_summary.txt
+    BNL/HX2/inputnoise_error_summary_bnl.txt (preferred)
+    BNL/HX/inputnoise_error_summary.txt (fallback)
 
 Writes:
-    BNL/HX/inputnoise_category_summary_bnl.txt
+    BNL/HX2/inputnoise_category_summary_bnl.txt
 
 This generator parses the per-stream input-noise error-summary format.
 
@@ -785,32 +786,56 @@ def main():
 
     parser.add_argument(
         "--input_file",
-        default="BNL/HX/inputnoise_error_summary.txt",
-        help="Input inputnoise_error_summary.txt file",
+        default=None,
+        help=(
+            "Input inputnoise_error_summary.txt file. If omitted, the script "
+            "checks BNL/HX2 first and then BNL/HX."
+        ),
     )
 
     parser.add_argument(
         "--output_file",
-        default="BNL/HX/inputnoise_category_summary_bnl.txt",
-        help="Output input-noise category summary file",
+        default="BNL/HX2/inputnoise_category_summary_bnl.txt",
+        help=(
+            "Output input-noise category summary file. "
+            "Default: BNL/HX2/inputnoise_category_summary_bnl.txt"
+        ),
     )
 
     args = parser.parse_args()
 
-    input_path = Path(args.input_file)
+    if args.input_file:
+        input_candidates = [Path(args.input_file)]
+    else:
+        input_candidates = [
+            Path("BNL/HX2/inputnoise_error_summary_bnl.txt"),
+            Path("BNL/HX/inputnoise_error_summary.txt"),
+        ]
 
-    if not input_path.exists():
+    input_path = next(
+        (candidate for candidate in input_candidates if candidate.is_file()),
+        None,
+    )
+
+    if input_path is None:
+        checked = "\n".join(f"  - {path}" for path in input_candidates)
         raise FileNotFoundError(
-            f"Input file not found: {input_path}\n"
-            "Run the input-noise plotting script first to generate "
-            "inputnoise_error_summary.txt."
+            "Input-noise error summary was not found. Checked:\n"
+            f"{checked}\n"
+            "Run the BNL input-noise plotting script first, and make sure its "
+            "-o/--output directory matches the folder used here."
         )
 
-    text = input_path.read_text()
+    output_path = Path(args.output_file)
+
+    print(f"Reading: {input_path}")
+    print(f"Writing: {output_path}")
+
+    text = input_path.read_text(encoding="utf-8")
     parsed = parse_inputnoise_error_summary(text)
 
     print_counts(parsed)
-    write_outputs(args.output_file, parsed)
+    write_outputs(output_path, parsed)
 
 
 if __name__ == "__main__":

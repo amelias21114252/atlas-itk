@@ -88,7 +88,7 @@ python plot_multi_IV_final_UCSC_Category_A_Di_warning.py -i "UCSC/ML/*/*.json"
 echo ""
 echo "Step 6: Generating BNL input-noise plots"
 
-
+python plot_multi_inputnoise_BNL_one_channel_plot_trigger_10_or_more.py
 # python plot_multi_inputnoise_BNL.py -i "BNL/HX/SN*/*.json"
 # python plot_multi_inputnoise_noskip_BNL.py -i "BNL/HX/SN*/*.json"
 # python plot_combined_inputnoise_BNL.py -i "BNL/HX/SN*/*.json"
@@ -103,7 +103,7 @@ echo "Step 6: Generating BNL input-noise plots"
 echo ""
 echo "Step 7: Generating LBNL input-noise plots"
 
-
+python plot_multi_inputnoise_LBNL_one_channel_subcategories.py
 # python plot_multi_inputnoise_LBNL.py -i "LBNL/HX/SN*/*.json"
 # python plot_multi_inputnoise_noskip_LBNL.py -i "LBNL/HX/SN*/*.json"
 # python plot_combined_inputnoise_LBNL.py -i "LBNL/HX/SN*/*.json"
