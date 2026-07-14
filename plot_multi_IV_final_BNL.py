@@ -7,18 +7,18 @@
 # Keeps original plotting style.
 #
 # Run:
-#   python plot_multi_IV_final_BNL.py -i "BNL/ML/*/*.json" -o "BNL/ML" --workers 6
+#   python plot_multi_IV_final_BNL.py -i "BNL/ML/*/*.json" -o "BNL/ML3" --workers 6
 #
 # Optional faster test without PNG:
-#   python plot_multi_IV_final_BNL.py -i "BNL/ML/*/*.json" -o "BNL/ML" --workers 6 --no_png
+#   python plot_multi_IV_final_BNL.py -i "BNL/ML/*/*.json" -o "BNL/ML3" --workers 6 --no_png
 #
 # Saves plots:
 #   BNL/ML/SN20USBML.../IV/SN20USBML....pdf
-#   BNL/ML/SN20USBML.../IV/SN20USBML....png
+#   BNL/ML3/SN20USBML.../IV/SN20USBML....png
 #
 # Saves summaries:
-#   BNL/ML/iv_error_summary.txt
-#   BNL/ML/iv_category_summary_bnl.txt
+#   BNL/ML3/iv_error_summary.txt
+#   BNL/ML3/iv_category_summary_bnl.txt
 #
 # Logic:
 #   > 300 nA and <= 600 nA  -> yellow warning / additional comment
@@ -63,7 +63,7 @@ mplt.rc(
 # ============================================================
 
 SITE = "BNL"
-DEFAULT_OUTPUT_DIR = "BNL/ML"
+DEFAULT_OUTPUT_DIR = "BNL/ML3"
 
 WARNING_CURRENT_THRESHOLD_NA = 300.0
 CATEGORY_A_CURRENT_THRESHOLD_NA = 600.0

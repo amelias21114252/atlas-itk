@@ -7,18 +7,18 @@
 # Keeps original plotting style from your UCSC IV plotting script.
 #
 # Run:
-#   python plot_multi_IV_final_UCSC.py -i "UCSC/ML/*/*.json" -o "UCSC/ML" --workers 6
+#   python plot_multi_IV_final_UCSC.py -i "UCSC/ML/*/*.json" -o "UCSC/ML3" --workers 6
 #
 # Optional faster test without PNG:
-#   python plot_multi_IV_final_UCSC.py -i "UCSC/ML/*/*.json" -o "UCSC/ML" --workers 6 --no_png
+#   python plot_multi_IV_final_UCSC.py -i "UCSC/ML/*/*.json" -o "UCSC/ML3" --workers 6 --no_png
 #
 # Saves plots:
-#   UCSC/ML/SN20USBML.../IV/SN20USBML....pdf
-#   UCSC/ML/SN20USBML.../IV/SN20USBML....png
+#   UCSC/ML3/SN20USBML.../IV/SN20USBML....pdf
+#   UCSC/ML3/SN20USBML.../IV/SN20USBML....png
 #
 # Saves summaries:
-#   UCSC/ML/iv_error_summary.txt
-#   UCSC/ML/iv_category_summary_ucsc.txt
+#   UCSC/ML3/iv_error_summary.txt
+#   UCSC/ML3/iv_category_summary_ucsc.txt
 #
 # Logic:
 #   > 300 nA and <= 600 nA  -> yellow warning / additional comment
@@ -63,7 +63,7 @@ mplt.rc(
 # ============================================================
 
 SITE = "UCSC"
-DEFAULT_OUTPUT_DIR = "UCSC/ML"
+DEFAULT_OUTPUT_DIR = "UCSC/ML3"
 
 WARNING_CURRENT_THRESHOLD_NA = 300.0
 CATEGORY_A_CURRENT_THRESHOLD_NA = 600.0

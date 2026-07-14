@@ -7,18 +7,18 @@
 # Keeps original plotting style.
 #
 # Run:
-#   python plot_multi_IV_final_LBNL.py -i "LBNL/ML/*/*.json" -o "LBNL/ML" --workers 6
+#   python plot_multi_IV_final_LBNL.py -i "LBNL/ML/*/*.json" -o "LBNL/ML3" --workers 6
 #
 # Optional faster test without PNG:
-#   python plot_multi_IV_final_LBNL.py -i "LBNL/ML/*/*.json" -o "LBNL/ML" --workers 6 --no_png
+#   python plot_multi_IV_final_LBNL.py -i "LBNL/ML/*/*.json" -o "LBNL/ML3" --workers 6 --no_png
 #
 # Saves plots:
-#   LBNL/ML/SN20USBML.../IV/SN20USBML....pdf
-#   LBNL/ML/SN20USBML.../IV/SN20USBML....png
+#   LBNL/ML3/SN20USBML.../IV/SN20USBML....pdf
+#   LBNL/ML3/SN20USBML.../IV/SN20USBML....png
 #
 # Saves summaries:
-#   LBNL/ML/iv_error_summary.txt
-#   LBNL/ML/iv_category_summary_lbnl.txt
+#   LBNL/ML3/iv_error_summary.txt
+#   LBNL/ML3/iv_category_summary_lbnl.txt
 #
 # Logic:
 #   > 300 nA and <= 600 nA  -> yellow warning / additional comment
@@ -63,7 +63,7 @@ mplt.rc(
 # ============================================================
 
 SITE = "LBNL"
-DEFAULT_OUTPUT_DIR = "LBNL/ML"
+DEFAULT_OUTPUT_DIR = "LBNL/ML3"
 
 WARNING_CURRENT_THRESHOLD_NA = 300.0
 CATEGORY_A_CURRENT_THRESHOLD_NA = 600.0
