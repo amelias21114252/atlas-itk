@@ -21,11 +21,9 @@ Behavior:
     * Official Category B/C assignment still requires at least 10 channels.
     * Clean streams are skipped.
     * No dashed mean lines are drawn.
-    * High-noise runs remain in the histogram (no-skip behavior).
-    * Category B streams also save high-value JSON and CSV summaries.
     * No red skipped/error comments are drawn on plots.
     * Problem PDFs are copied into:
-          LBNL/HX/problem_inputnoise_noskip_histograms/
+          LBNL/HX/problem_inputnoise_histograms/
               Category_B_i_away_high_inputnoise/
               Category_B_ii_under_high_inputnoise/
               Category_C_i_away_low_inputnoise/
@@ -61,7 +59,11 @@ from matplotlib import cm
 # ============================================================
 
 SITE = "LBNL"
-DEFAULT_OUTPUT_DIR = "LBNL/HX2"
+DEFAULT_OUTPUT_DIR = "LBNL/HX3"
+
+X_AXIS_MIN = 600
+X_AXIS_MAX = 1200
+HISTOGRAM_BINS = 160
 
 EXPECTED_INPUTNOISE_TESTS = 25
 KEEP_FIT_TYPE_CODE = 4
@@ -70,7 +72,7 @@ HIGH_NOISE_THRESHOLD_ENC = 1100.0
 LOW_NOISE_THRESHOLD_ENC = 600.0
 CATEGORY_MIN_CHANNELS = 10
 
-PROBLEM_PARENT_FOLDER = "problem_inputnoise_noskip_histograms"
+PROBLEM_PARENT_FOLDER = "problem_inputnoise_histograms"
 
 CATEGORY_PDF_FOLDERS = {
     "B(i)": "Category_B_i_away_high_inputnoise",
@@ -303,7 +305,6 @@ def make_empty_stream_result(module_name, stream):
         "plot_pdf": "",
         "plot_png": "",
         "category_pdf_copies": [],
-        "high_summary": [],
     }
 
 
@@ -352,10 +353,10 @@ def has_any_channel_issue(result):
 
 
 def is_problem_result(result):
-    return bool(
-        has_any_channel_issue(result)
-        or result["category_d_records"]
-    )
+    # Plot only streams that contain at least one out-of-range channel.
+    # Invalid/missing files are still reported in the text summary, but they
+    # do not trigger a histogram by themselves.
+    return has_any_channel_issue(result)
 
 
 # ============================================================
@@ -556,18 +557,6 @@ def analyze_module_both_streams(module_name, input_files):
                             mean=mean_val,
                         )
 
-                        result["high_summary"].append({
-                            "filename": basename,
-                            "stream": stream,
-                            "run": run_number,
-                            "high_count": high_count,
-                            "high_values": [
-                                float(value)
-                                for value in noise
-                                if value > HIGH_NOISE_THRESHOLD_ENC
-                            ],
-                        })
-
                     if low_count >= 1:
                         warning_message = (
                             f"{basename} — {low_count} channel"
@@ -743,7 +732,8 @@ def plot_problem_combined_stream(
 
         ax.hist(
             entry["noise"],
-            bins=80,
+            bins=HISTOGRAM_BINS,
+            range=(X_AXIS_MIN, X_AXIS_MAX),
             alpha=0.5,
             color=color,
             edgecolor="black",
@@ -761,7 +751,8 @@ def plot_problem_combined_stream(
 
         ax.hist(
             entry["noise"],
-            bins=80,
+            bins=HISTOGRAM_BINS,
+            range=(X_AXIS_MIN, X_AXIS_MAX),
             alpha=0.5,
             color=color,
             edgecolor="black",
@@ -772,8 +763,9 @@ def plot_problem_combined_stream(
     ax.set_xlabel("Input Noise [ENC]")
     ax.set_ylabel("Counts")
     ax.grid(True)
-    # Display the problem range consistently with the other subcategory plots.
-    ax.set_xlim(0, 2000)
+    # Show the complete problem range, including values below 600 ENC
+    # and high-noise values up to 2000 ENC.
+    ax.set_xlim(X_AXIS_MIN, X_AXIS_MAX)
 
     title_str = (
         f"Module: {module_name} | Parent: {parent_name}\n"
@@ -842,42 +834,96 @@ def plot_problem_combined_stream(
     result["plot_png"] = str(normal_png) if save_png else ""
     result["category_pdf_copies"] = category_pdf_copies
 
-    if result["high_summary"]:
-        csv_path = (
-            normal_dir
-            / f"{module_name}_{stream}_high_values_gt1100.csv"
-        )
-        json_path = (
-            normal_dir
-            / f"{module_name}_{stream}_high_values_gt1100.json"
-        )
-
-        with csv_path.open("w", newline="") as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow([
-                "filename",
-                "stream",
-                "run",
-                "high_count",
-                "high_values",
-            ])
-
-            for entry in result["high_summary"]:
-                writer.writerow([
-                    entry["filename"],
-                    entry["stream"],
-                    entry["run"],
-                    entry["high_count"],
-                    json.dumps(entry["high_values"]),
-                ])
-
-        with json_path.open("w") as jsonfile:
-            json.dump(result["high_summary"], jsonfile, indent=2)
-
-        print(f"Saved high-value CSV: {csv_path}")
-        print(f"Saved high-value JSON: {json_path}")
-
+    write_low_high_json_csv(result, normal_dir)
     return True
+
+
+def write_low_high_json_csv(result, output_dir):
+    """Write every value below 600 ENC or above 1100 ENC for a problem stream."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    rows = []
+    runs = []
+
+    for entry in sorted(
+        result["file_data"],
+        key=lambda item: (
+            item.get("run") if item.get("run") is not None else 999,
+            item.get("file", ""),
+        ),
+    ):
+        noise = np.asarray(entry["noise"], dtype=float).reshape(-1)
+        low_indices = np.flatnonzero(noise < LOW_NOISE_THRESHOLD_ENC)
+        high_indices = np.flatnonzero(noise > HIGH_NOISE_THRESHOLD_ENC)
+
+        run_record = {
+            "file": entry.get("file", ""),
+            "run": entry.get("run"),
+            "timestamp": entry.get("timestamp", "Unknown Time"),
+            "temperature_C": entry.get("temp"),
+            "low_count": int(low_indices.size),
+            "high_count": int(high_indices.size),
+            "low_values": [
+                {"channel": int(index), "value": float(noise[index])}
+                for index in low_indices
+            ],
+            "high_values": [
+                {"channel": int(index), "value": float(noise[index])}
+                for index in high_indices
+            ],
+        }
+        runs.append(run_record)
+
+        for category, indices in (("low", low_indices), ("high", high_indices)):
+            for index in indices:
+                rows.append({
+                    "module": result["module"],
+                    "parent": result["parent_name"],
+                    "stream": result["stream"],
+                    "file": entry.get("file", ""),
+                    "run": entry.get("run"),
+                    "timestamp": entry.get("timestamp", "Unknown Time"),
+                    "temperature_C": entry.get("temp"),
+                    "channel": int(index),
+                    "category": category,
+                    "threshold": (
+                        f"<{LOW_NOISE_THRESHOLD_ENC:g}"
+                        if category == "low"
+                        else f">{HIGH_NOISE_THRESHOLD_ENC:g}"
+                    ),
+                    "value_ENC": float(noise[index]),
+                })
+
+    payload = {
+        "module": result["module"],
+        "parent": result["parent_name"],
+        "stream": result["stream"],
+        "low_threshold_ENC": LOW_NOISE_THRESHOLD_ENC,
+        "high_threshold_ENC": HIGH_NOISE_THRESHOLD_ENC,
+        "total_low_values": sum(run["low_count"] for run in runs),
+        "total_high_values": sum(run["high_count"] for run in runs),
+        "runs": runs,
+    }
+
+    stem = f"{result['module']}_{result['stream']}_low_high_values"
+    json_path = output_dir / f"{stem}.json"
+    csv_path = output_dir / f"{stem}.csv"
+
+    with json_path.open("w", encoding="utf-8") as outfile:
+        json.dump(payload, outfile, indent=2)
+
+    fieldnames = [
+        "module", "parent", "stream", "file", "run", "timestamp",
+        "temperature_C", "channel", "category", "threshold", "value_ENC",
+    ]
+    with csv_path.open("w", newline="", encoding="utf-8") as outfile:
+        writer = csv.DictWriter(outfile, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    print(f"Saved low/high JSON: {json_path}")
+    print(f"Saved low/high CSV:  {csv_path}")
 
 
 # ============================================================
@@ -924,12 +970,12 @@ def write_error_summary_txt(results, output_base_dir, unreadable_files):
 
     summary_path = (
         output_base_dir
-        / "histograms_combined_noskip_error_summary.txt"
+        / "histograms_combined_error_summary.txt"
     )
 
     with summary_path.open("w") as outfile:
         outfile.write("=" * 80 + "\n")
-        outfile.write("LBNL COMBINED INPUT-NOISE NOSKIP HISTOGRAM SUMMARY\n")
+        outfile.write("LBNL COMBINED INPUT-NOISE HISTOGRAM SUMMARY\n")
         outfile.write("=" * 80 + "\n\n")
         outfile.write(
             f"Category B threshold: > "
@@ -946,8 +992,9 @@ def write_error_summary_txt(results, output_base_dir, unreadable_files):
         )
         outfile.write(
             "Plot trigger: at least one channel above 1100 ENC or below "
-            "600 ENC, or Category D(ii). Official Category B/C still "
-            "requires 10 or more affected channels.\n\n"
+            "600 ENC. Missing/invalid files are reported but do not trigger "
+            "a plot. Official Category B/C still requires 10 or more affected "
+            "channels.\n\n"
         )
 
         write_record_section(
@@ -1001,8 +1048,8 @@ def write_error_summary_txt(results, output_base_dir, unreadable_files):
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Plot combined LBNL no-skip input-noise histograms for streams "
-            "with at least one out-of-range channel or Category D(ii)."
+            "Plot combined LBNL input-noise histograms for streams with "
+            "at least one out-of-range channel ."
         )
     )
 
@@ -1023,7 +1070,7 @@ def main():
         default=None,
         help=(
             "Output base directory. Default is inferred from input "
-            "or LBNL/HX2."
+            "or LBNL/HX3."
         ),
     )
 
@@ -1071,7 +1118,7 @@ def main():
         ).mkdir(parents=True, exist_ok=True)
 
     print("\n" + "=" * 80)
-    print("LBNL COMBINED INPUT-NOISE NOSKIP PROBLEM HISTOGRAMS")
+    print("LBNL NO-SKIP PROBLEM INPUT-NOISE HISTOGRAMS + JSON/CSV")
     print("=" * 80)
     print(f"Input files found: {len(input_files)}")
     print(f"Output base directory: {output_base_dir}")

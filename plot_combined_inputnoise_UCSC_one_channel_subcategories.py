@@ -758,7 +758,7 @@ def plot_problem_combined_stream(
     ax.grid(True)
     # Show the complete problem range, including values below 600 ENC
     # and high-noise values up to 2000 ENC.
-    ax.set_xlim(0, 2000)
+    ax.set_xlim(600, 1200)
 
     title_str = (
         f"Module: {module_name} | Parent: {parent_name}\n"

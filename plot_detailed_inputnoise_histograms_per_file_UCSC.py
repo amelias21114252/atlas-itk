@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Script: plot_detailed_inputnoise_histograms_per_file_BNL.py
+Script: plot_detailed_inputnoise_histograms_per_file_UCSC.py
 
 Description:
     For each JSON file matching a pattern, this script:
     - Plots per-channel histograms for innse_under and innse_away
     - Plots one combined histogram for each stream
-    - Saves plots inside UCSC/HX3/SN.../detailedhistograms/
+    - Saves plots inside UCSC/HX2/SN.../detailedhistograms/
     - Writes a TXT summary with:
-        Category B: all high input noise values > 1000
+        Category B: all high input noise values > 1100
         Category C: all low input noise values < 600
         Category D: files skipped, empty, missing, or unreadable
         Category E: script did not run for entire module / no valid histograms
@@ -43,6 +43,12 @@ error_summary = {
     "D": [],
     "E": [],
 }
+
+
+LOW_NOISE_THRESHOLD_ENC = 600.0
+HIGH_NOISE_THRESHOLD_ENC = 1100.0
+DEFAULT_OUTPUT_DIR = "UCSC/HX2"
+
 
 
 # ============================================================
@@ -105,7 +111,7 @@ def get_module_name(file_path):
     return get_module_from_path(file_path)
 
 
-def get_base_output_dir(input_files, fallback_output="UCSC/HX"):
+def get_base_output_dir(input_files, fallback_output="UCSC/HX2"):
     if not input_files:
         return fallback_output
 
@@ -158,13 +164,25 @@ def add_error(category, module_name, file_path, message, count=None, values=None
 
 
 def log_low_high_values(module_name, file_path, stream, plot_name, values):
-    low_vals = [float(v) for v in values if float(v) < 600]
-    high_vals = [float(v) for v in values if float(v) > 1000]
+    values = np.asarray(values, dtype=float).reshape(-1)
+    values = values[np.isfinite(values)]
+
+    low_vals = [
+        float(v) for v in values
+        if float(v) < LOW_NOISE_THRESHOLD_ENC
+    ]
+    high_vals = [
+        float(v) for v in values
+        if float(v) > HIGH_NOISE_THRESHOLD_ENC
+    ]
 
     filename = os.path.basename(file_path)
 
     if high_vals:
-        msg = f"{filename} — {plot_name} — high_count = {len(high_vals)}, high_values = {high_vals}"
+        msg = (
+            f"{filename} — {plot_name} — "
+            f"high_count = {len(high_vals)}, high_values = {high_vals}"
+        )
         print(f"⚠️ CATEGORY B: {msg}")
         add_error(
             "B",
@@ -178,7 +196,10 @@ def log_low_high_values(module_name, file_path, stream, plot_name, values):
         )
 
     if low_vals:
-        msg = f"{filename} — {plot_name} — low_count = {len(low_vals)}, low_values = {low_vals}"
+        msg = (
+            f"{filename} — {plot_name} — "
+            f"low_count = {len(low_vals)}, low_values = {low_vals}"
+        )
         print(f"⚠️ CATEGORY C: {msg}")
         add_error(
             "C",
@@ -192,6 +213,49 @@ def log_low_high_values(module_name, file_path, stream, plot_name, values):
         )
 
     return low_vals, high_vals
+
+
+def has_problem_values(values):
+    """Return True when any finite channel is below 600 or above 1100 ENC."""
+    try:
+        arr = np.asarray(flatten(values), dtype=float).reshape(-1)
+    except Exception:
+        try:
+            arr = np.asarray(values, dtype=float).reshape(-1)
+        except Exception:
+            return False
+
+    arr = arr[np.isfinite(arr)]
+
+    if arr.size == 0:
+        return False
+
+    return bool(
+        np.any(arr < LOW_NOISE_THRESHOLD_ENC)
+        or np.any(arr > HIGH_NOISE_THRESHOLD_ENC)
+    )
+
+
+def module_has_problem_values(file_paths):
+    """Screen a module before plotting any detailed/channel histograms."""
+    for file_path in file_paths:
+        try:
+            data = json_to_dict(file_path)
+            results = data.get("results", {})
+
+            for key in ("innse_under", "innse_away"):
+                values = results.get(key, [])
+
+                if values and has_problem_values(values):
+                    return True
+
+        except Exception:
+            # Unreadable files remain Category D, but are not enough by
+            # themselves to trigger problem-value plots.
+            continue
+
+    return False
+
 
 
 # ============================================================
@@ -278,7 +342,8 @@ def save_histogram(
     plt.text(
         0.98,
         0.95,
-        f"(<600: {low_count}, >1000: {high_count})",
+        f"(<{LOW_NOISE_THRESHOLD_ENC:.0f}: {low_count}, "
+        f">{HIGH_NOISE_THRESHOLD_ENC:.0f}: {high_count})",
         transform=plt.gca().transAxes,
         ha="right",
         va="top",
@@ -371,8 +436,15 @@ def plot_file_histograms(file_path, output_base_dir, module_name):
 
                     print(
                         f"🔍 {base_name}_{plot_name}: "
-                        f"<600: {len(low_vals)}, >1000: {len(high_vals)}"
+                        f"<600: {len(low_vals)}, >1100: {len(high_vals)}"
                     )
+
+                    if not (low_vals or high_vals):
+                        print(
+                            f"Skipping clean channel plot: "
+                            f"{base_name}_{plot_name}"
+                        )
+                        continue
 
                     title = (
                         f"{title_prefix}\n"
@@ -436,8 +508,15 @@ def plot_file_histograms(file_path, output_base_dir, module_name):
 
                     print(
                         f"🔍 {base_name}_{plot_name}: "
-                        f"<600: {len(low_vals)}, >1000: {len(high_vals)}"
+                        f"<600: {len(low_vals)}, >1100: {len(high_vals)}"
                     )
+
+                    if not (low_vals or high_vals):
+                        print(
+                            f"Skipping clean channel plot: "
+                            f"{base_name}_{plot_name}"
+                        )
+                        continue
 
                     title = (
                         f"{title_prefix}\n"
@@ -496,39 +575,48 @@ def plot_file_histograms(file_path, output_base_dir, module_name):
 
                     print(
                         f"📊 {base_name}_{plot_name}: "
-                        f"<600: {len(low_vals)}, >1000: {len(high_vals)}"
+                        f"<600: {len(low_vals)}, >1100: {len(high_vals)}"
                     )
 
-                    title = (
-                        f"{title_prefix}\n"
-                        f"Combined innse_under "
-                        f"(NTCpb={ntcpb_temp:.1f}C, NTCx={ntcx_temp:.1f}C)\n"
-                        f"{timestamp_str}"
-                    )
+                    if not (low_vals or high_vals):
+                        print(
+                            f"Skipping clean combined plot: "
+                            f"{base_name}_{plot_name}"
+                        )
+                    else:
+                        title = (
+                            f"{title_prefix}\n"
+                            f"Combined innse_under "
+                            f"(NTCpb={ntcpb_temp:.1f}C, NTCx={ntcx_temp:.1f}C)\n"
+                            f"{timestamp_str}"
+                        )
 
-                    output_path = os.path.join(save_dir, f"{base_name}_combined_innse_under.pdf")
+                        output_path = os.path.join(
+                            save_dir,
+                            f"{base_name}_combined_innse_under.pdf",
+                        )
 
-                    save_histogram(
-                        all_under,
-                        output_path,
-                        title,
-                        bar_color,
-                        len(low_vals),
-                        len(high_vals),
-                        bins=30,
-                    )
+                        save_histogram(
+                            all_under,
+                            output_path,
+                            title,
+                            bar_color,
+                            len(low_vals),
+                            len(high_vals),
+                            bins=30,
+                        )
 
-                    low_high_rows.append({
-                        "filename": os.path.basename(file_path),
-                        "stream": "under",
-                        "plot": plot_name,
-                        "low_count": len(low_vals),
-                        "low_values": low_vals,
-                        "high_count": len(high_vals),
-                        "high_values": high_vals,
-                    })
+                        low_high_rows.append({
+                            "filename": os.path.basename(file_path),
+                            "stream": "under",
+                            "plot": plot_name,
+                            "low_count": len(low_vals),
+                            "low_values": low_vals,
+                            "high_count": len(high_vals),
+                            "high_values": high_vals,
+                        })
 
-                    made_plot = True
+                        made_plot = True
 
         except Exception as e:
             msg = f"Could not plot combined_innse_under: {e}"
@@ -556,39 +644,48 @@ def plot_file_histograms(file_path, output_base_dir, module_name):
 
                     print(
                         f"📊 {base_name}_{plot_name}: "
-                        f"<600: {len(low_vals)}, >1000: {len(high_vals)}"
+                        f"<600: {len(low_vals)}, >1100: {len(high_vals)}"
                     )
 
-                    title = (
-                        f"{title_prefix}\n"
-                        f"Combined innse_away "
-                        f"(NTCpb={ntcpb_temp:.1f}C, NTCx={ntcx_temp:.1f}C)\n"
-                        f"{timestamp_str}"
-                    )
+                    if not (low_vals or high_vals):
+                        print(
+                            f"Skipping clean combined plot: "
+                            f"{base_name}_{plot_name}"
+                        )
+                    else:
+                        title = (
+                            f"{title_prefix}\n"
+                            f"Combined innse_away "
+                            f"(NTCpb={ntcpb_temp:.1f}C, NTCx={ntcx_temp:.1f}C)\n"
+                            f"{timestamp_str}"
+                        )
 
-                    output_path = os.path.join(save_dir, f"{base_name}_combined_innse_away.pdf")
+                        output_path = os.path.join(
+                            save_dir,
+                            f"{base_name}_combined_innse_away.pdf",
+                        )
 
-                    save_histogram(
-                        all_away,
-                        output_path,
-                        title,
-                        bar_color,
-                        len(low_vals),
-                        len(high_vals),
-                        bins=30,
-                    )
+                        save_histogram(
+                            all_away,
+                            output_path,
+                            title,
+                            bar_color,
+                            len(low_vals),
+                            len(high_vals),
+                            bins=30,
+                        )
 
-                    low_high_rows.append({
-                        "filename": os.path.basename(file_path),
-                        "stream": "away",
-                        "plot": plot_name,
-                        "low_count": len(low_vals),
-                        "low_values": low_vals,
-                        "high_count": len(high_vals),
-                        "high_values": high_vals,
-                    })
+                        low_high_rows.append({
+                            "filename": os.path.basename(file_path),
+                            "stream": "away",
+                            "plot": plot_name,
+                            "low_count": len(low_vals),
+                            "low_values": low_vals,
+                            "high_count": len(high_vals),
+                            "high_values": high_vals,
+                        })
 
-                    made_plot = True
+                        made_plot = True
 
         except Exception as e:
             msg = f"Could not plot combined_innse_away: {e}"
@@ -657,7 +754,7 @@ def write_error_summary_txt(output_base_dir):
     summary_path = os.path.join(output_base_dir, "detailedhistograms_error_summary.txt")
 
     categories = {
-        "B": "CATEGORY B — high input noise values greater than 1000",
+        "B": "CATEGORY B — high input noise values greater than 1100",
         "C": "CATEGORY C — low input noise values less than 600",
         "D": "CATEGORY D — files skipped, empty, missing, or unreadable",
         "E": "CATEGORY E — script did not run for entire module / no valid detailed histograms plotted",
@@ -748,7 +845,7 @@ def main():
         "-o",
         "--output",
         default=None,
-        help="Output base directory. Default is inferred from input path, e.g. UCSC/HX3",
+        help="Output base directory. Default: UCSC/HX2",
     )
 
     args = parser.parse_args()
@@ -771,7 +868,7 @@ def main():
     else:
         parser.error("Please provide either --serial_number or -i/--input")
 
-    output_base_dir = args.output or get_base_output_dir(input_files, "UCSC/HX3")
+    output_base_dir = args.output or DEFAULT_OUTPUT_DIR
 
     print(f"\nFound {len(input_files)} input files")
     print(f"Output base directory: {output_base_dir}")
@@ -798,6 +895,19 @@ def main():
     module_plot_status = {}
 
     for module_name, files in grouped_files.items():
+        if not module_has_problem_values(files):
+            print(
+                f"Skipping clean module {module_name}: "
+                "no channel below 600 ENC or above 1100 ENC."
+            )
+            module_plot_status[module_name] = True
+            continue
+
+        print(
+            f"Plotting problem module {module_name}: "
+            "at least one channel is below 600 ENC or above 1100 ENC."
+        )
+
         any_ok = False
 
         for file_path in files:

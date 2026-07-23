@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script: plot_combined_inputnoise_BNL_one_channel_subcategories.py
+Script: python plot_combined_inputnoise_BNL_one_channel_subcategories.py
 
 Usage:
     python plot_combined_inputnoise_BNL_one_channel_subcategories.py -i "BNL/HX/SN*/*.json" -o "BNL/HX2"
@@ -758,7 +758,7 @@ def plot_problem_combined_stream(
     ax.grid(True)
     # Show the complete problem range, including values below 600 ENC
     # and high-noise values up to 2000 ENC.
-    ax.set_xlim(0, 2000)
+    ax.set_xlim(600, 1200)
 
     title_str = (
         f"Module: {module_name} | Parent: {parent_name}\n"

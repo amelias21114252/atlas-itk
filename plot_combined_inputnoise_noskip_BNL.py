@@ -1,39 +1,39 @@
 #!/usr/bin/env python3
-'''
-Plot input noise after thermal cycling ATLAS ITk strips barrel modules
+"""
+Script: plot_combined_inputnoise_noskip_BNL_HX3_thin_bins.py
 
 Usage:
 python plot_combined_inputnoise_noskip_BNL.py -i 'BNL/HX/SN20USBHX2002099/SN20USBHX2002099_*.json'
 python plot_combined_inputnoise_noskip_BNL.py -i 'BNL/HX/SN*/*.json'
-'''
+python plot_combined_inputnoise_noskip_BNL.py --serial_number 20USBHX2002657
+"""
 
 import os
 import json
-import csv
 import glob
 import argparse
 from datetime import datetime
 from collections import defaultdict
+from functools import lru_cache
 
 import numpy as np
+
 import matplotlib as mplt
 mplt.use("Agg")
 import matplotlib.pyplot as plt
+
+# Faster non-interactive rendering for large batches.
+mplt.rcParams["path.simplify"] = True
+mplt.rcParams["path.simplify_threshold"] = 1.0
 from matplotlib import cm
 
-
 # ============================================================
-# Thresholds
-# ============================================================
-
-LOW_NOISE_THRESHOLD = 600
-HIGH_NOISE_THRESHOLD = 1100
-
-
-# ============================================================
-# Global error summary
+# Shared histogram display settings
 # ============================================================
 
+X_AXIS_MIN = 600
+X_AXIS_MAX = 1200
+HISTOGRAM_BINS = 160
 error_summary = {
     "B": [],
     "C": [],
@@ -42,9 +42,8 @@ error_summary = {
 }
 
 
-# ============================================================
-# Helper functions
-# ============================================================
+module_plot_status = {}
+
 
 def flatten(input_data):
     if isinstance(input_data, list) and all(isinstance(x, (int, float)) for x in input_data):
@@ -56,6 +55,7 @@ def flatten(input_data):
     raise TypeError(f"Expected list of numbers or list of lists, got {type(input_data)}")
 
 
+@lru_cache(maxsize=None)
 def json_to_dict(file_path):
     with open(file_path, "r") as f:
         return json.load(f)
@@ -76,10 +76,41 @@ def ensure_sn(serial):
 
 def parse_timestamp(ts_str):
     try:
-        ts_str = str(ts_str).replace("T", " ").replace("Z", "").split(".")[0].strip()
+        ts_str = (
+            str(ts_str)
+            .replace("T", " ")
+            .replace("Z", "")
+            .split(".")[0]
+            .strip()
+        )
         return datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
     except Exception:
         return datetime.min
+
+
+def clean_timestamp(raw_time):
+    if not raw_time:
+        return "Unknown Time"
+
+    return (
+        str(raw_time)
+        .replace("T", " ")
+        .split(".")[0]
+        .replace("Z", "")
+        .strip()
+    )
+
+
+def clean_parent_name(parent_name):
+    if not parent_name or parent_name == "Unknown":
+        return "Unknown"
+
+    parent_name = str(parent_name)
+
+    if parent_name.startswith("SN"):
+        return parent_name
+
+    return f"SN{parent_name}"
 
 
 def get_module_from_path(file_path):
@@ -137,9 +168,40 @@ def add_error(category, module_name, file_path, message, count=None, values=None
     })
 
 
-# ============================================================
-# File handling
-# ============================================================
+def log_low_high_values(module_name, file_path, stream, values):
+    filename = os.path.basename(file_path)
+
+    low_vals = [float(v) for v in values if float(v) < 600]
+    high_vals = [float(v) for v in values if float(v) > 1100]
+
+    if high_vals:
+        msg = f"{filename} — high_count = {len(high_vals)}, high_values = {high_vals}"
+        print(f"⚠️ CATEGORY B: {msg}")
+        add_error(
+            "B",
+            module_name,
+            file_path,
+            msg,
+            count=len(high_vals),
+            values=high_vals,
+            stream=stream,
+        )
+
+    if low_vals:
+        msg = f"{filename} — low_count = {len(low_vals)}, low_values = {low_vals}"
+        print(f"⚠️ CATEGORY C: {msg}")
+        add_error(
+            "C",
+            module_name,
+            file_path,
+            msg,
+            count=len(low_vals),
+            values=low_vals,
+            stream=stream,
+        )
+
+    return low_vals, high_vals
+
 
 def filter_input_files(infiles, keep_fit_code=4):
     print(f"\nFiltering to keep fit_type_code = {keep_fit_code}")
@@ -181,17 +243,24 @@ def group_files_by_module(files):
     return dict(grouped)
 
 
-# ============================================================
-# Plot combined histogram
-# ============================================================
+def get_parent_name_from_files(json_paths, module_name):
+    for path in json_paths:
+        try:
+            data = json_to_dict(path)
+            return clean_parent_name(data.get("parent_name", module_name))
+        except Exception:
+            continue
+
+    return module_name
+
 
 def plot_combined_stream(json_paths, stream, output_base_dir, module_name):
     file_data = []
     warm_noise_values = []
     cold_noise_values = []
+    skipped_files = []
 
-    # This list is now ONLY for high values > 1100
-    high_summary = []
+    parent_name = get_parent_name_from_files(json_paths, module_name)
 
     result_key = "innse_under" if stream == "under" else "innse_away"
 
@@ -203,6 +272,7 @@ def plot_combined_stream(json_paths, stream, output_base_dir, module_name):
 
             results = data.get("results", {})
             properties = data.get("properties", {})
+            dcs = properties.get("DCS", {})
 
             if result_key not in results:
                 raise KeyError(f"Missing results['{result_key}']")
@@ -218,62 +288,20 @@ def plot_combined_stream(json_paths, stream, output_base_dir, module_name):
             if len(noise) == 0:
                 raise ValueError("noise array is empty")
 
-            low_vals = [float(val) for val in noise if val < LOW_NOISE_THRESHOLD]
-            high_vals = [float(val) for val in noise if val > HIGH_NOISE_THRESHOLD]
+            log_low_high_values(module_name, path, stream, noise)
 
-            if high_vals:
-                msg = f"{filename} — high_count = {len(high_vals)}, high_values = {high_vals}"
-                print(f"⚠️ CATEGORY B: {msg}")
-                add_error(
-                    "B",
-                    module_name,
-                    path,
-                    msg,
-                    count=len(high_vals),
-                    values=high_vals,
-                    stream=stream,
-                )
-
-                # Save JSON/CSV summary ONLY for files with values > 1100
-                high_summary.append({
-                    "filename": filename,
-                    "stream": stream,
-                    "high_count": len(high_vals),
-                    "high_values": high_vals,
-                })
-
-            if low_vals:
-                msg = f"{filename} — low_count = {len(low_vals)}, low_values = {low_vals}"
-                print(f"⚠️ CATEGORY C: {msg}")
-                add_error(
-                    "C",
-                    module_name,
-                    path,
-                    msg,
-                    count=len(low_vals),
-                    values=low_vals,
-                    stream=stream,
-                )
-
-            dcs = properties.get("DCS", {})
             temp = float(dcs.get("AMAC_NTCpb", 999))
+            mean_val = float(np.mean(noise))
+            std_val = float(np.std(noise))
 
-            raw_time = data.get("timestamp", data.get("date", ""))
-            timestamp = (
-                str(raw_time)
-                .replace("T", " ")
-                .replace("Z", "")
-                .split(".")[0]
-                .strip()
-                if raw_time
-                else None
-            )
+            timestamp_raw = data.get("timestamp", data.get("date", "Unknown Time"))
+            timestamp_clean = clean_timestamp(timestamp_raw)
 
             file_data.append({
                 "file": filename,
                 "temp": temp,
                 "noise": noise,
-                "timestamp": timestamp,
+                "timestamp": timestamp_clean,
             })
 
             if temp > 10:
@@ -282,14 +310,16 @@ def plot_combined_stream(json_paths, stream, output_base_dir, module_name):
                 cold_noise_values.extend(noise)
 
         except Exception as e:
-            msg = f"{filename} — {e}"
+            msg = f"{filename} — skipped: {e}"
             print(f"❌ CATEGORY D: {msg}")
-            add_error("D", module_name, path, msg)
+            skipped_files.append(msg)
+            add_error("D", module_name, path, msg, stream=stream)
+            continue
 
     if not file_data:
         msg = f"No valid histogram data for {module_name}, stream {stream}"
         print(f"❌ CATEGORY E: {msg}")
-        add_error("E", module_name, None, msg)
+        add_error("E", module_name, None, msg, stream=stream)
         return False
 
     cold_data = sorted(
@@ -305,33 +335,40 @@ def plot_combined_stream(json_paths, stream, output_base_dir, module_name):
     cold_cmap = cm.get_cmap("Blues", max(len(cold_data), 1))
     warm_cmap = cm.get_cmap("Oranges", max(len(warm_data), 1))
 
-    cold_mean, cold_std = (
-        (np.mean(cold_noise_values), np.std(cold_noise_values))
-        if cold_noise_values
-        else (np.nan, np.nan)
-    )
-
-    warm_mean, warm_std = (
-        (np.mean(warm_noise_values), np.std(warm_noise_values))
-        if warm_noise_values
-        else (np.nan, np.nan)
-    )
+    cold_mean = np.mean(cold_noise_values) if cold_noise_values else np.nan
+    warm_mean = np.mean(warm_noise_values) if warm_noise_values else np.nan
+    cold_std = np.std(cold_noise_values) if cold_noise_values else np.nan
+    warm_std = np.std(warm_noise_values) if warm_noise_values else np.nan
 
     plt.figure(figsize=(14, 6))
 
     legend_entries = []
-    first_timestamp = next((d["timestamp"] for d in file_data if d["timestamp"]), None)
+
+    first_timestamp = None
+
+    for entry in file_data:
+        if entry["timestamp"] != "Unknown Time":
+            first_timestamp = entry["timestamp"]
+            break
+
+    if first_timestamp:
+        legend_entries.append(f"Timestamp: {first_timestamp}")
 
     for i, entry in enumerate(cold_data):
         color = cold_cmap(i)
         mean_val = np.mean(entry["noise"])
         std_val = np.std(entry["noise"])
 
-        label = f"cold_{i + 1:02d} T={entry['temp']:.1f}C | mu={mean_val:.1f}, sigma={std_val:.1f}"
+        label = (
+            f"cold_{i + 1:02d} "
+            f"T={entry['temp']:.1f}C | "
+            f"mu={mean_val:.1f}, sigma={std_val:.1f}"
+        )
 
         plt.hist(
             entry["noise"],
-            bins=40,
+            bins=HISTOGRAM_BINS,
+            range=(X_AXIS_MIN, X_AXIS_MAX),
             alpha=0.5,
             color=color,
             edgecolor="black",
@@ -352,11 +389,16 @@ def plot_combined_stream(json_paths, stream, output_base_dir, module_name):
         mean_val = np.mean(entry["noise"])
         std_val = np.std(entry["noise"])
 
-        label = f"warm_{i + 1:02d} T={entry['temp']:.1f}C | mu={mean_val:.1f}, sigma={std_val:.1f}"
+        label = (
+            f"warm_{i + 1:02d} "
+            f"T={entry['temp']:.1f}C | "
+            f"mu={mean_val:.1f}, sigma={std_val:.1f}"
+        )
 
         plt.hist(
             entry["noise"],
-            bins=40,
+            bins=HISTOGRAM_BINS,
+            range=(X_AXIS_MIN, X_AXIS_MAX),
             alpha=0.5,
             color=color,
             edgecolor="black",
@@ -392,34 +434,17 @@ def plot_combined_stream(json_paths, stream, output_base_dir, module_name):
 
     plt.xlabel("Input Noise [ENC]")
     plt.ylabel("Counts")
-    plt.ylim(0, 150)
-    plt.xlim(600, 1200)
-
-    title_str = f"Module: {module_name}\nOverlaid {stream} Histograms"
+    plt.grid(True)
+    plt.xlim(X_AXIS_MIN, X_AXIS_MAX)
+    title_str = f"Module: {module_name} | Parent: {parent_name}\nOverlaid {stream} Histograms"
 
     if first_timestamp:
         title_str += f"\nTimestamp: {first_timestamp}"
 
     plt.title(title_str)
 
-    high_total = sum(d["high_count"] for d in high_summary)
-
-    if high_total > 0:
-        plt.text(
-            0.98,
-            0.95,
-            f"High input-noise values: {high_total} (>{HIGH_NOISE_THRESHOLD})",
-            transform=plt.gca().transAxes,
-            color="red",
-            fontsize="small",
-            ha="right",
-            va="top",
-        )
-
-    plt.grid(True)
-
     if legend_entries:
-        plt.legend(
+        legend = plt.legend(
             legend_entries,
             fontsize="x-small",
             loc="center left",
@@ -431,65 +456,35 @@ def plot_combined_stream(json_paths, stream, output_base_dir, module_name):
     save_dir = os.path.join(output_base_dir, module_name, "histograms_combined_noskip")
     mkdir(save_dir)
 
-    base = os.path.join(save_dir, f"{module_name}_combined-{stream}")
+    save_path = os.path.join(save_dir, f"{module_name}_combined-{stream}")
 
-    plt.savefig(f"{base}.pdf")
-    plt.savefig(f"{base}.png", dpi=300)
+    plt.savefig(f"{save_path}.pdf")
+    plt.savefig(f"{save_path}.png", dpi=300)
     plt.close()
 
-    print(f"✅ Saved: {base}.pdf and {base}.png")
-
-    # Save per-module JSON/CSV ONLY if high values > 1100 exist
-    if high_summary:
-        csv_path = os.path.join(save_dir, f"{module_name}_{stream}_high_values_gt1100.csv")
-
-        with open(csv_path, mode="w", newline="") as csvfile:
-            writer = csv.writer(csvfile)
-            writer.writerow([
-                "filename",
-                "stream",
-                "high_count",
-                "high_values",
-            ])
-
-            for entry in high_summary:
-                writer.writerow([
-                    entry["filename"],
-                    entry["stream"],
-                    entry["high_count"],
-                    json.dumps(entry["high_values"]),
-                ])
-
-        json_path = os.path.join(save_dir, f"{module_name}_{stream}_high_values_gt1100.json")
-
-        with open(json_path, "w") as jf:
-            json.dump(high_summary, jf, indent=2)
-
-        print(f"📝 Saved high-value CSV: {csv_path}")
-        print(f"📝 Saved high-value JSON: {json_path}")
+    print(f"✅ Saved: {save_path}.pdf and {save_path}.png")
 
     return True
 
 
-# ============================================================
-# Error summary TXT
-# ============================================================
-
 def write_error_summary_txt(output_base_dir):
     mkdir(output_base_dir)
 
-    summary_path = os.path.join(output_base_dir, "histograms_combined_noskip_error_summary.txt")
+    summary_path = os.path.join(
+        output_base_dir,
+        "histograms_combined_noskip_error_summary.txt",
+    )
 
     categories = {
-        "B": f"CATEGORY B — high input noise values greater than {HIGH_NOISE_THRESHOLD}",
-        "C": f"CATEGORY C — low input noise values less than {LOW_NOISE_THRESHOLD}",
-        "D": "CATEGORY D — files skipped, empty, missing, or unreadable",
+        "B": "CATEGORY B — high input noise values greater than 1100",
+        "C": "CATEGORY C — low input noise values less than 600",
+        "D": "CATEGORY D — files empty, missing, unreadable, or otherwise invalid",
         "E": "CATEGORY E — script did not run for entire module / no valid histogram plotted",
     }
 
     with open(summary_path, "w") as f:
         f.write("=" * 80 + "\n")
-        f.write("INPUT NOISE HISTOGRAM NOSKIP ERROR SUMMARY\n")
+        f.write("INPUT NOISE HISTOGRAM ERROR SUMMARY\n")
         f.write("=" * 80 + "\n\n")
 
         total_entries = sum(len(error_summary[key]) for key in error_summary)
@@ -547,31 +542,167 @@ def write_error_summary_txt(output_base_dir):
     print("=" * 80)
 
 
-# ============================================================
-# Main
-# ============================================================
+def print_final_module_summary():
+    categories = {
+        "B": "CATEGORY B — high input noise values greater than 1100",
+        "C": "CATEGORY C — low input noise values less than 600",
+        "D": "CATEGORY D — skipped / bad files",
+        "E": "CATEGORY E — no valid histogram plotted",
+    }
+
+    category_modules = {}
+
+    for key in categories:
+        modules = sorted(set(
+            entry["module"]
+            for entry in error_summary[key]
+            if entry["module"] != "Unknown"
+        ))
+
+        category_modules[key] = modules
+
+    all_failed_modules = sorted(set(
+        module
+        for modules in category_modules.values()
+        for module in modules
+    ))
+
+    passed_modules = sorted(set(module_plot_status.keys()) - set(all_failed_modules))
+
+    print("\n" + "=" * 100)
+    print("FINAL MODULE SUMMARY")
+    print("=" * 100)
+
+    print(f"TOTAL MODULES PROCESSED: {len(module_plot_status)}")
+    print(f"TOTAL PASSED MODULES:    {len(passed_modules)}")
+    print(f"TOTAL FAILED MODULES:    {len(all_failed_modules)}")
+
+    for key, title in categories.items():
+        modules = category_modules[key]
+
+        print("\n" + "-" * 100)
+        print(title)
+        print("-" * 100)
+        print(f"FAILED MODULE COUNT: {len(modules)}")
+
+        if not modules:
+            print("None")
+            continue
+
+        for idx, module in enumerate(modules, start=1):
+            print(f"{idx:03d}. {module}")
+
+    print("\n" + "=" * 100)
+    print("OVERALL FAILED MODULES")
+    print("=" * 100)
+
+    if not all_failed_modules:
+        print("None")
+    else:
+        for idx, module in enumerate(all_failed_modules, start=1):
+            failed_categories = []
+
+            for cat in categories:
+                if module in category_modules[cat]:
+                    failed_categories.append(f"Category {cat}")
+
+            print(f"{idx:03d}. {module} — {', '.join(failed_categories)}")
+
+    print("\n" + "=" * 100)
+    print("PASSED MODULES")
+    print("=" * 100)
+
+    if not passed_modules:
+        print("None")
+    else:
+        for idx, module in enumerate(passed_modules, start=1):
+            print(f"{idx:03d}. {module}")
+
+    print("\n" + "=" * 100)
+    print("DETAILED ERROR MESSAGES")
+    print("=" * 100)
+
+    for key, title in categories.items():
+        entries = error_summary[key]
+
+        print("\n" + "-" * 100)
+        print(title)
+        print("-" * 100)
+        print(f"TOTAL ENTRIES: {len(entries)}")
+
+        if key in ["B", "C"]:
+            total_values = sum(entry.get("count") or 0 for entry in entries)
+            print(f"TOTAL VALUES: {total_values}")
+
+        if not entries:
+            print("None")
+            continue
+
+        grouped = defaultdict(list)
+
+        for entry in entries:
+            grouped[entry["module"]].append(entry)
+
+        for module, module_entries in grouped.items():
+            print(f"\nModule: {module}")
+
+            if key in ["B", "C"]:
+                module_total = sum(entry.get("count") or 0 for entry in module_entries)
+                print(f"Module total values: {module_total}")
+
+            for entry in module_entries:
+                if key == "B":
+                    print(
+                        f"⚠️ CATEGORY B: {entry['file']} — "
+                        f"stream={entry.get('stream', 'N/A')}, "
+                        f"high_count={entry.get('count', 0)}, "
+                        f"high_values={entry.get('values', [])}"
+                    )
+
+                elif key == "C":
+                    print(
+                        f"⚠️ CATEGORY C: {entry['file']} — "
+                        f"stream={entry.get('stream', 'N/A')}, "
+                        f"low_count={entry.get('count', 0)}, "
+                        f"low_values={entry.get('values', [])}"
+                    )
+
+                elif key == "D":
+                    print(f"❌ CATEGORY D: {entry['file']} — {entry['message']}")
+
+                elif key == "E":
+                    print(f"❌ CATEGORY E: {entry['file']} — {entry['message']}")
+
+    print("\n" + "=" * 100)
+    print("END FINAL MODULE SUMMARY")
+    print("=" * 100)
+
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Plot combined input noise histograms"
+        description="Plot all valid combined input-noise histograms without mean/std skipping"
     )
 
     parser.add_argument(
         "--serial_number",
-        help="Serial number, e.g. 20USBHX2002592",
+        help="Serial number, e.g. 20USBHX2002657",
     )
 
     parser.add_argument(
         "-i",
         "--input",
-        help="Glob pattern, e.g. 'BNL/HX/SN20USBHX2002099/SN20USBHX2002099_*.json' or 'BNL/HX/SN*/*.json'",
+        help=(
+            "Glob pattern, e.g. "
+            "'BNL/HX/SN20USBHX2002099/SN20USBHX2002099_*.json' "
+            "or 'BNL/HX/SN*/*.json'"
+        ),
     )
 
     parser.add_argument(
         "-o",
         "--output",
         default=None,
-        help="Output base directory. Default is inferred from input path, e.g. BNL/HX3",
+        help="Output base directory. Default: BNL/HX3",
     )
 
     args = parser.parse_args()
@@ -594,15 +725,23 @@ def main():
     else:
         parser.error("Please provide either --serial_number or -i/--input")
 
-    output_base_dir = args.output or get_base_output_dir(input_files, "BNL/HX3")
+    output_base_dir = args.output or "BNL/HX3"
 
     print(f"\nFound {len(input_files)} input files")
     print(f"Output base directory: {output_base_dir}")
+    print(f"Histogram bins: {HISTOGRAM_BINS} (original bar size)")
+    print("Mean/std rejection: disabled; all valid runs are plotted")
 
     if len(input_files) == 0:
         print("❌ CATEGORY E: No JSON files found.")
-        add_error("E", "Unknown", None, "No JSON files found. Script did not run.")
+        add_error(
+            "E",
+            "Unknown",
+            None,
+            "No JSON files found. Script did not run.",
+        )
         write_error_summary_txt(output_base_dir)
+        print_final_module_summary()
         return
 
     filtered_files = filter_input_files(input_files)
@@ -614,11 +753,15 @@ def main():
 
     if not grouped_files:
         print("❌ CATEGORY E: No modules found after filtering.")
-        add_error("E", "Unknown", None, "No modules found after filtering.")
+        add_error(
+            "E",
+            "Unknown",
+            None,
+            "No modules found after filtering.",
+        )
         write_error_summary_txt(output_base_dir)
+        print_final_module_summary()
         return
-
-    module_plot_status = {}
 
     for module_name, files in grouped_files.items():
         under_ok = plot_combined_stream(
@@ -647,6 +790,7 @@ def main():
             )
 
     write_error_summary_txt(output_base_dir)
+    print_final_module_summary()
 
 
 if __name__ == "__main__":

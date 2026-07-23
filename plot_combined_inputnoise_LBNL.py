@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script: plot_combined_inputnoise_BNL.py
+
 
 Usage:
 python plot_combined_inputnoise_LBNL.py -i 'LBNL/HX/SN20USBHX2002099/SN20USBHX2002099_*.json'
@@ -130,18 +130,7 @@ def get_module_name(file_path):
 
 
 def get_base_output_dir(input_files, fallback_output="LBNL/HX3"):
-    if not input_files:
-        return fallback_output
-
-    first_file = os.path.normpath(input_files[0])
-    parts = first_file.split(os.sep)
-
-    if "LBNL" in parts:
-        idx = parts.index("LBNL")
-
-        if idx + 1 < len(parts):
-            return os.path.join(parts[idx], parts[idx + 1])
-
+    """Always save generated outputs under the LBNL/HX3 tree."""
     return fallback_output
 
 
@@ -703,8 +692,8 @@ def main():
     parser.add_argument(
         "-o",
         "--output",
-        default=None,
-        help="Output base directory. Default is inferred from input path, e.g. LBNL/HX3",
+        default="LBNL/HX3",
+        help="Output base directory. Default: LBNL/HX3",
     )
 
     args = parser.parse_args()
@@ -727,7 +716,7 @@ def main():
     else:
         parser.error("Please provide either --serial_number or -i/--input")
 
-    output_base_dir = args.output or get_base_output_dir(input_files, "LBNL/HX3")
+    output_base_dir = args.output
 
     print(f"\nFound {len(input_files)} input files")
     print(f"Output base directory: {output_base_dir}")

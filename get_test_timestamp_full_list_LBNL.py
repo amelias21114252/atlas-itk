@@ -6,10 +6,6 @@
 # Purpose:
 #   Get Response Curve TC timestamps for LBNL HX serial numbers.
 #
-# This version removes:
-#   1. Huge hard-coded serial_numbers list
-#   2. Huge raw_ml_hx_text block
-#
 # Reads:
 #   serial_lists/lbnl_hx_serials.txt
 #   serial_lists/lbnl_ml_serials.txt

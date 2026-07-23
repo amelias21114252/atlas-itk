@@ -6,9 +6,6 @@
 # Purpose:
 #   Get Response Curve TC timestamps for UCSC HX serial numbers.
 #
-# This version removes:
-#   1. Huge hard-coded serial_numbers list
-#   2. Huge raw_ml_hx_text block
 #
 # Reads:
 #   serial_lists/ucsc_hx_serials.txt

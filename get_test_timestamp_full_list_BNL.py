@@ -6,8 +6,6 @@
 # Purpose:
 #   Get Response Curve TC timestamps for BNL HX serial numbers.
 #
-# This version removes the giant hard-coded serial_numbers list.
-#
 # Reads:
 #   bnl_hx_serials.txt
 #   bnl_ml_serials.txt
