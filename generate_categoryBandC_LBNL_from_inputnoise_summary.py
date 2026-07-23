@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-pythongenerate_categoryBandC_LBNL_from_inputnoise_summary.py
+python generate_categoryBandC_LBNL_from_inputnoise_summary.py
 
 Reads:
     LBNL/HX2/inputnoise_error_summary_lbnl.txt

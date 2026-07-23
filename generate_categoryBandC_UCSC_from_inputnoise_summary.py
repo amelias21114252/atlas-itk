@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-generate_categoryBandC_UCSC_from_inputnoise_summary.py
+python generate_categoryBandC_UCSC_from_inputnoise_summary.py
 
 Reads:
     UCSC/HX2/inputnoise_error_summary_ucsc.txt

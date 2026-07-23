@@ -5,8 +5,7 @@
 #
 # This version reads BNL ML serial numbers automatically from:
 # serial_lists/bnl_ml_serials.txt
-#
-# So you no longer need to copy and paste serial numbers into this file.
+
 
 import os
 import json
